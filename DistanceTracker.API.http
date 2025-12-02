@@ -1,0 +1,6 @@
+@DistanceTracker.API_HostAddress = http://localhost:5069
+
+GET {{DistanceTracker.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
