@@ -3,6 +3,7 @@ using DistanceTracker.API.Models;
 using DistanceTracker.API.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using DistanceTracker.API.Services;
 
 namespace DistanceTracker.API.Controllers
 {
@@ -11,10 +12,11 @@ namespace DistanceTracker.API.Controllers
     public class TripsController : ControllerBase
     {
         private readonly DistanceTrackerContext _context;
-
-        public TripsController(DistanceTrackerContext context)
+        private readonly IGeocodingService _geocodingService;
+        public TripsController(DistanceTrackerContext context, IGeocodingService geocodingService)
         {
             _context = context;
+            _geocodingService = geocodingService;
         }
 
         // POST: TripsController/Ct
@@ -27,17 +29,23 @@ namespace DistanceTracker.API.Controllers
                 Id = tripId,
                 Date = dto.Date,
                 TotalDistance = 0,
-                TripStops = dto.Stops.Select((address, index) => new TripStop
+                TripStops = new List<TripStop>(),
+            };
+            for(int i=0; i< dto.Stops.Count; i++)
+            {
+                var address = dto.Stops[i];
+                var (latitude, longitude) = await _geocodingService.GeocodeAddressAsync(address);
+                var tripStop = new TripStop
                 {
                     Id = Guid.NewGuid(),
                     TripId = tripId,
-                    Address = address,
-                    Order = index ,
-                    Latitude = 0, // Placeholder for actual latitude
-                    Longitude = 0 // Placeholder for actual longitude
-                }).ToList()
-                
-            };
+                    Address = dto.Stops[i],
+                    Latitude = latitude,
+                    Longitude = longitude,
+                    Order = i,
+                };
+                trip.TripStops.Add(tripStop);
+            }
             _context.Trips.Add(trip);
             await _context.SaveChangesAsync();
             var response = new TripResponseDTO

@@ -7,6 +7,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+// Add HttpClient and Geocoding Service
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<DistanceTracker.API.Services.IGeocodingService, DistanceTracker.API.Services.NominatimGeocodingService>();
 // Database
 builder.Services.AddDbContext<DistanceTrackerContext>(options => options.UseSqlite("Data Source=distancetracker.db"));
 var app = builder.Build();
