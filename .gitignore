@@ -363,3 +363,7 @@ MigrationBackup/
 FodyWeavers.xsd
 #remove secrets
 appsettings.Development.json
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
