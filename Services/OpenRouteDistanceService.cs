@@ -1,7 +1,7 @@
 ﻿
 using System.Text.Json;
 using DistanceTracker.API.DTOs;
-
+using System.Net.Http.Json;
 
 
 namespace DistanceTracker.API.Services
@@ -14,14 +14,14 @@ namespace DistanceTracker.API.Services
         {
             _httpClient = httpClient;
             _baseUrl = configuration["ExternalApis:OpenRouteService:BaseUrl"]
-                ?? throw new ArgumentNullException("Nominatim BaseUrl not configured");
+                ?? throw new ArgumentNullException("Open Route Service BaseUrl not configured");
 
             // Set User-Agent once
             var ApiKey = configuration["ExternalApis:OpenRouteService:ApiKey"]
-                ?? throw new ArgumentNullException("Nominatim ApiKey not configured");
-            _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {ApiKey}");
+                ?? throw new ArgumentNullException("Open Route Service ApiKey not configured");
+            _httpClient.DefaultRequestHeaders.Add("Authorization", ApiKey);
         }
-        public async Task<List<decimal>> CalculateDistanceAsync(List<(decimal Latitude, decimal Longitude)> coordinates)
+        public async Task<List<decimal>> CalculateRouteDistancesAsync(List<(decimal Latitude, decimal Longitude)> coordinates)
         {
             //Url encode and make url
             var url = $"{_baseUrl}/v2/directions/driving-car";
@@ -29,7 +29,7 @@ namespace DistanceTracker.API.Services
             var requestBody = new
             {
                 coordinates = coordinates
-                    .Select(c => new[] { c.Latitude, c.Longitude })
+                    .Select(c => new[] { c.Longitude, c.Latitude })
                     .ToArray()
             };
            
@@ -48,6 +48,17 @@ namespace DistanceTracker.API.Services
                 .ToList();
             return distance;
             
+        }
+        public async Task<decimal> CalculateDistanceAsync(decimal lat1, decimal lon1, decimal lat2, decimal lon2)
+        {
+            var coordinates = new List<(decimal, decimal)>
+            {
+                (lat1, lon1),
+                (lat2, lon2)
+            };
+
+            var distances = await CalculateRouteDistancesAsync(coordinates);
+            return distances.FirstOrDefault();
         }
     }
 }
