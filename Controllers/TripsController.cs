@@ -13,10 +13,12 @@ namespace DistanceTracker.API.Controllers
     {
         private readonly DistanceTrackerContext _context;
         private readonly IGeocodingService _geocodingService;
-        public TripsController(DistanceTrackerContext context, IGeocodingService geocodingService)
+        private readonly IDistanceService _distanceService;
+        public TripsController(DistanceTrackerContext context, IGeocodingService geocodingService, IDistanceService distanceService)
         {
             _context = context;
             _geocodingService = geocodingService;
+            _distanceService = distanceService;
         }
 
         // POST: TripsController/Ct
@@ -42,10 +44,22 @@ namespace DistanceTracker.API.Controllers
                     Address = dto.Stops[i],
                     Latitude = latitude,
                     Longitude = longitude,
+                    DistanceToNext = 0,
                     Order = i,
                 };
                 trip.TripStops.Add(tripStop);
             }
+            var latitudeLongitudeList = trip.TripStops
+                .Select(s => (s.Latitude, s.Longitude))
+                .ToList();
+            var distances = await _distanceService.CalculateRouteDistancesAsync(latitudeLongitudeList);
+            decimal totalDistance = 0;
+            for(int i=0; i< distances.Count; i++)
+            {
+                trip.TripStops[i].DistanceToNext = distances[i];
+                totalDistance += distances[i];
+            }
+            trip.TotalDistance = totalDistance;
             _context.Trips.Add(trip);
             await _context.SaveChangesAsync();
             var response = new TripResponseDTO

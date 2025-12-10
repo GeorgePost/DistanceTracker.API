@@ -19,7 +19,7 @@ namespace DistanceTracker.API.Services
             // Set User-Agent once
             var ApiKey = configuration["ExternalApis:OpenRouteService:ApiKey"]
                 ?? throw new ArgumentNullException("Open Route Service ApiKey not configured");
-            _httpClient.DefaultRequestHeaders.Add("Authorization", ApiKey);
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", ApiKey);
         }
         public async Task<List<decimal>> CalculateRouteDistancesAsync(List<(decimal Latitude, decimal Longitude)> coordinates)
         {
