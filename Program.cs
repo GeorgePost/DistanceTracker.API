@@ -1,5 +1,7 @@
 using DistanceTracker.API.Data;
+using DistanceTracker.API.Models;
 using DistanceTracker.API.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,8 +16,22 @@ builder.Services.AddScoped<IGeocodingService, NominatimGeocodingService>();
 builder.Services.AddScoped<IDistanceService, OpenRouteDistanceService>();
 // Database
 builder.Services.AddDbContext<DistanceTrackerContext>(options => options.UseSqlite("Data Source=distancetracker.db"));
-var app = builder.Build();
 
+// add Identity
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+{
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireUppercase = false;
+    options.Password.RequireDigit = false;
+    options.Password.RequireLowercase = false;
+    options.Password.RequiredLength = 6;
+})
+.AddEntityFrameworkStores<DistanceTrackerContext>()
+.AddDefaultTokenProviders();
+// add Authentication and Authorization
+builder.Services.AddAuthentication();
+builder.Services.AddAuthorization();
+var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {

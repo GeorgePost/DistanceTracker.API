@@ -44,7 +44,7 @@ namespace DistanceTracker.API.Controllers
                     Address = dto.Stops[i],
                     Latitude = latitude,
                     Longitude = longitude,
-                    DistanceToNext = 0,
+                    DistanceToNext = null,
                     Order = i,
                 };
                 trip.TripStops.Add(tripStop);
