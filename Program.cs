@@ -1,10 +1,16 @@
 using DistanceTracker.API.Data;
 using DistanceTracker.API.Models;
 using DistanceTracker.API.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 var builder = WebApplication.CreateBuilder(args);
-
+// Access AppSettings
+var jwtSettings = builder.Configuration.GetSection("Jwt");
+string secretKey = jwtSettings["SigningKey"] ?? throw new ArgumentNullException("JWT SecretKey not configured");
+string issuer = jwtSettings["Issuer"] ?? throw new ArgumentNullException("JWT Issuer not configured");
+string audience = jwtSettings["Audience"] ?? throw new ArgumentNullException("JWT Audience not configured");
 // Add services to the container.
 //Services
 builder.Services.AddControllers();
@@ -14,6 +20,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IGeocodingService, NominatimGeocodingService>();
 builder.Services.AddScoped<IDistanceService, OpenRouteDistanceService>();
+builder.Services.AddScoped<JwtAuth>();
 // Database
 builder.Services.AddDbContext<DistanceTrackerContext>(options => options.UseSqlite("Data Source=distancetracker.db"));
 
@@ -29,7 +36,23 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<DistanceTrackerContext>()
 .AddDefaultTokenProviders();
 // add Authentication and Authorization
-builder.Services.AddAuthentication();
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options => {
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = false,
+        ValidateAudience = false,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = false,
+        ValidIssuer = issuer,
+        ValidAudience = audience,
+        IssuerSigningKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(secretKey))
+    };
+});
 builder.Services.AddAuthorization();
 var app = builder.Build();
 // Configure the HTTP request pipeline.
@@ -41,6 +64,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

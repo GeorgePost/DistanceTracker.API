@@ -1,8 +1,10 @@
 ﻿using DistanceTracker.API.DTOs;
 using DistanceTracker.API.Models;
+using DistanceTracker.API.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System.Data.SqlTypes;
+using System.Security.Claims;
 
 namespace DistanceTracker.API.Controllers
 {
@@ -11,16 +13,19 @@ namespace DistanceTracker.API.Controllers
     public class AuthController : ControllerBase
     {
         private readonly UserManager<ApplicationUser> _userManager;
-
-        public AuthController(UserManager<ApplicationUser> userManager)
+        private readonly JwtAuth _jwtAuth;
+        public AuthController(UserManager<ApplicationUser> userManager, JwtAuth jwtAuth)
         {
             _userManager = userManager;
+            _jwtAuth = jwtAuth;
         }
         private async Task<IdentityResult> PasswordValidatorAsync(string password)
         {
             var passwordValidator = new PasswordValidator<ApplicationUser>();
             return await passwordValidator.ValidateAsync(_userManager, null!, password);
         }
+
+        
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterUserDTO dto)
         {
@@ -36,13 +41,19 @@ namespace DistanceTracker.API.Controllers
                 Email = dto.Email
             };
             var result= await _userManager.CreateAsync(user, dto.Password);
+            var token = _jwtAuth.Create(user);
             if (result.Succeeded)
             {
-                var userDto = new ApplicationUserDTO
+                var userDto = new AuthResponseDTO
                 {
-                    UserId = Guid.Parse(user.Id),
-                    UserName = user.UserName,
-                    UserEmail = user.Email
+                    User = new ApplicationUserDTO
+                    {
+                        UserId = Guid.Parse(user.Id),
+                        UserName = user.UserName,
+                        UserEmail = user.Email
+                    },
+                    Token=token
+
                 };
                 return Ok(userDto);
             }
@@ -66,11 +77,15 @@ namespace DistanceTracker.API.Controllers
             {
                 return Unauthorized("Invalid email or password.");
             }
-            var userDto = new ApplicationUserDTO
+            var token = _jwtAuth.Create(user);
+            var userDto = new AuthResponseDTO
             {
-                UserId = Guid.Parse(user.Id),
-                UserName = user.UserName,
-                UserEmail = user.Email
+                User= new ApplicationUserDTO{
+                    UserId = Guid.Parse(user.Id),
+                    UserName = user.UserName,
+                    UserEmail = user.Email,
+                },
+                Token= token
             };
             return Ok(userDto);
         }

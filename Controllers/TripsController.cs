@@ -4,10 +4,12 @@ using DistanceTracker.API.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using DistanceTracker.API.Services;
+using Microsoft.AspNetCore.Authorization;
 
 namespace DistanceTracker.API.Controllers
 {
     [ApiController]
+    [Authorize]
     [Route("api/[controller]")]
     public class TripsController : ControllerBase
     {
