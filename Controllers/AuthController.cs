@@ -38,7 +38,8 @@ namespace DistanceTracker.API.Controllers
             var user = new ApplicationUser
             {
                 UserName = dto.UserName,
-                Email = dto.Email
+                Email = dto.Email,
+                Trips = []
             };
             var result= await _userManager.CreateAsync(user, dto.Password);
             var token = _jwtAuth.Create(user);
