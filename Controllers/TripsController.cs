@@ -36,7 +36,7 @@ namespace DistanceTracker.API.Controllers
             var trip = new Trip
             {
                 Id = tripId,
-                Date = dto.Date,
+                DateUTC = dto.Date.ToUniversalTime(),
                 TotalDistance = 0,
                 TripStops = new List<TripStop>(),
                 UserId = userId
@@ -73,7 +73,7 @@ namespace DistanceTracker.API.Controllers
             var response = new TripResponseDTO
             {
                 Id = trip.Id,
-                Date = trip.Date,
+                Date = trip.DateUTC,
                 TotalDistance = trip.TotalDistance,
                 Notes = trip.Notes,
                 Stops = trip.TripStops.Select(s => new TripStopDTO
@@ -108,7 +108,7 @@ namespace DistanceTracker.API.Controllers
             var response = new TripResponseDTO
             {
                 Id = trip.Id,
-                Date = trip.Date,
+                Date = trip.DateUTC,
                 TotalDistance = trip.TotalDistance,
                 Notes = trip.Notes,
                 Stops = trip.TripStops.Select(s => new TripStopDTO
@@ -124,17 +124,48 @@ namespace DistanceTracker.API.Controllers
             return response;
         }
         [HttpGet]
-        public async Task<ActionResult<List<TripResponseDTO>>> GetTrips()
+        public async Task<ActionResult<List<TripResponseDTO>>> GetTrips(DateTime? StartDate, DateTime? EndDate)
         {
             var UserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var trips = await _context.Trips
+            List<Trip> trips;
+            if (StartDate.HasValue ^ EndDate.HasValue)
+            {
+                return BadRequest("Both StartDate and EndDate must be provided together.");
+            }
+            if (StartDate!=null && EndDate!=null)
+            {
+                if(StartDate>= EndDate)
+                {
+                    return BadRequest("StartDate must be earlier than EndDate.");
+                }
+                if (StartDate?.Kind != DateTimeKind.Utc || EndDate?.Kind != DateTimeKind.Utc)
+                {
+                    return BadRequest("Dates must be in UTC format.");
+                }
+                var startUtc = StartDate.Value.ToUniversalTime();
+                var endUtc = EndDate.Value.ToUniversalTime();
+                trips = await _context.Trips
                 .Where(t => t.UserId == UserId)
+                .Where(t=> t.DateUTC >= startUtc)
+                .Where(t=> t.DateUTC <= endUtc)
+                .OrderByDescending(t=> t.DateUTC)
                 .Include(t => t.TripStops)
                 .ToListAsync();
+            }
+            else
+            {
+                trips = await _context.Trips
+                .Where(t => t.UserId == UserId)
+                .OrderByDescending(t => t.DateUTC)
+                .Include(t => t.TripStops)
+                .ToListAsync();
+            }
+                
+            
             var response = trips.Select(trip => new TripResponseDTO
             {
                 Id = trip.Id,
-                Date = trip.Date,
+                Date = trip.DateUTC,
                 TotalDistance = trip.TotalDistance,
                 Notes = trip.Notes,
                 Stops = trip.TripStops.Select(s => new TripStopDTO

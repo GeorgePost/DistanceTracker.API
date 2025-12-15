@@ -14,6 +14,9 @@ namespace DistanceTracker.API.Data
         {
             base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<Trip>()
+                .HasIndex(t => new { t.UserId, t.DateUTC });
+
+            modelBuilder.Entity<Trip>()
                 .HasMany(t => t.TripStops)
                 .WithOne(ts => ts.Trip)
                 .HasForeignKey(ts => ts.TripId)

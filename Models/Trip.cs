@@ -3,7 +3,7 @@
     public class Trip
     {
         public Guid Id { get; set; }
-        public DateTime Date { get; set; }
+        public DateTime DateUTC { get; set; }
         public decimal TotalDistance { get; set; }
         public string? Notes { get; set; }
         public string? UserId { get; set; }
