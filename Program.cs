@@ -4,8 +4,11 @@ using DistanceTracker.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration.UserSecrets;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Security.Claims;
+using System.Threading.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
 // Access AppSettings
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -80,6 +83,56 @@ builder.Services.AddAuthentication(options =>
     };
 });
 builder.Services.AddAuthorization();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("TripsWritePolicy", context => {
+            var userId= context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var partitionKey = userId?? context.Connection.RemoteIpAddress?.ToString()?? "anonymous";
+            return RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: partitionKey,
+                factory: partition => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 5,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 0
+                });
+            }
+        );
+    options.AddPolicy("RegisterPolicy", context => {
+        var partitionKey =  context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: partitionKey,
+            factory: partition => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 1,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    }
+
+        );
+    options.AddPolicy("LoginPolicy", context =>
+    {
+        var partitionKey =  context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: partitionKey,
+            factory: partition => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 3,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
+    options.OnRejected =    (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        return new ValueTask( context.HttpContext.Response.WriteAsync("Too many requests. Please try again later.", token));
+    };
+});
 var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

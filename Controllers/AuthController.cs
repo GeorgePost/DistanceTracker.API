@@ -3,6 +3,7 @@ using DistanceTracker.API.Models;
 using DistanceTracker.API.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Data.SqlTypes;
 using System.Security.Claims;
 
@@ -25,7 +26,7 @@ namespace DistanceTracker.API.Controllers
             return await passwordValidator.ValidateAsync(_userManager, null!, password);
         }
 
-        
+        [EnableRateLimiting("RegisterPolicy")]
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterUserDTO dto)
         {
@@ -65,6 +66,7 @@ namespace DistanceTracker.API.Controllers
             }
 
         }
+        [EnableRateLimiting("LoginPolicy")]
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginUserDTO dto)
         {

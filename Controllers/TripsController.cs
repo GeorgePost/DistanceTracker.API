@@ -1,10 +1,11 @@
-﻿using DistanceTracker.API.DTOs;
+﻿using DistanceTracker.API.Data;
+using DistanceTracker.API.DTOs;
 using DistanceTracker.API.Models;
-using DistanceTracker.API.Data;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using DistanceTracker.API.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 namespace DistanceTracker.API.Controllers
 {
@@ -24,6 +25,7 @@ namespace DistanceTracker.API.Controllers
         }
 
         // POST: TripsController/Ct
+        [EnableRateLimiting("TripsWritePolicy")]
         [HttpPost]
         public async Task<ActionResult<Trip>> CreateTrip(CreateTripDto dto)
         {
