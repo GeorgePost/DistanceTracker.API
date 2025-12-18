@@ -1,6 +1,7 @@
 ﻿using DistanceTracker.API.DTOs;
 using DistanceTracker.API.Models;
 using DistanceTracker.API.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -129,7 +130,26 @@ namespace DistanceTracker.API.Controllers
                 return BadRequest(errors);
             }
         }
-
+        [HttpPost("confirm-email")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ConfirmEmail(ConfirmEmailDTO dto)
+        {
+            var user = await _userManager.FindByIdAsync(dto.UserId);
+            if (user == null)
+            {
+                return BadRequest("Invalid email or token.");
+            }
+            var result = await _userManager.ConfirmEmailAsync(user, dto.Token);
+            if (result.Succeeded)
+            {
+                return Ok("Email confirmed successfully.");
+            }
+            else
+            {
+                var errors = result.Errors.Select(e => e.Description).ToList();
+                return BadRequest("Invalid or expired toekn");
+            }
+        }
 
     }
 }
