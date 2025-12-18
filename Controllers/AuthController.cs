@@ -92,6 +92,43 @@ namespace DistanceTracker.API.Controllers
             };
             return Ok(userDto);
         }
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword(ForgotPasswordDTO Dto)
+        {
+            var user = await _userManager.FindByEmailAsync(Dto.Email);
+
+            if (user != null)
+            {
+                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+
+                // TODO: Send token via email (SendGrid / Azure Email)
+                // For now: log or temporarily return it in dev
+                return Ok(token);
+            }
+
+            // Always return OK to prevent account enumeration
+            return Ok();
+        }
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword(ResetPasswordDTO dto)
+        {
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user == null)
+            {
+                return BadRequest("Invalid email or token.");
+            }
+            var result = await _userManager.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
+            //To do: Send confirmation email
+            if (result.Succeeded)
+            {
+                return Ok("Password reset successful.");
+            }
+            else
+            {
+                var errors = result.Errors.Select(e => e.Description).ToList();
+                return BadRequest(errors);
+            }
+        }
 
 
     }
