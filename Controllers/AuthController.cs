@@ -1,6 +1,7 @@
 ﻿using DistanceTracker.API.DTOs;
 using DistanceTracker.API.Models;
 using DistanceTracker.API.Services;
+using DistanceTracker.API.Services.Email;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -16,10 +17,12 @@ namespace DistanceTracker.API.Controllers
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly JwtAuth _jwtAuth;
-        public AuthController(UserManager<ApplicationUser> userManager, JwtAuth jwtAuth)
+        private readonly IEmailService _emailService;
+        public AuthController(UserManager<ApplicationUser> userManager, JwtAuth jwtAuth, IEmailService emailService)
         {
             _userManager = userManager;
             _jwtAuth = jwtAuth;
+            _emailService = emailService;
         }
         private async Task<IdentityResult> PasswordValidatorAsync(string password)
         {
@@ -41,24 +44,20 @@ namespace DistanceTracker.API.Controllers
             {
                 UserName = dto.UserName,
                 Email = dto.Email,
-                Trips = []
+                Trips = [],
+                EmailConfirmed = false,
             };
             var result= await _userManager.CreateAsync(user, dto.Password);
-            var token = _jwtAuth.Create(user);
+            //var token = _jwtAuth.Create(user);
             if (result.Succeeded)
             {
-                var userDto = new AuthResponseDTO
-                {
-                    User = new ApplicationUserDTO
-                    {
-                        UserId = Guid.Parse(user.Id),
-                        UserName = user.UserName,
-                        UserEmail = user.Email
-                    },
-                    Token=token
-
-                };
-                return Ok(userDto);
+                var token = await  _userManager.GenerateEmailConfirmationTokenAsync(user);
+                await _emailService.SendEmailAsync(
+                    user.Email!,
+                    "Confirm your email",
+                    $"Your confirmation token:\n\n{token}"
+                );
+                return Ok("If the Email exists, a confirmation has been sent.");
             }
             else
             {
@@ -104,11 +103,15 @@ namespace DistanceTracker.API.Controllers
 
                 // TODO: Send token via email (SendGrid / Azure Email)
                 // For now: log or temporarily return it in dev
-                return Ok(token);
+                await _emailService.SendEmailAsync(
+                    user.Email!,
+                    "Reset your password",
+                    $"Your reset token:\n\n{token}"
+                );
             }
 
             // Always return OK to prevent account enumeration
-            return Ok();
+            return Ok("If the email exists, a reset email has been sent.");
         }
         [HttpPost("reset-password")]
         public async Task<IActionResult> ResetPassword(ResetPasswordDTO dto)

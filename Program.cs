@@ -1,14 +1,15 @@
 using DistanceTracker.API.Data;
 using DistanceTracker.API.Models;
 using DistanceTracker.API.Services;
+using DistanceTracker.API.Services.Email;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using StackExchange.Redis;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
-using StackExchange.Redis;
 var builder = WebApplication.CreateBuilder(args);
 // Access AppSettings
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -50,6 +51,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<IGeocodingService, NominatimGeocodingService>();
 builder.Services.AddScoped<IDistanceService, OpenRouteDistanceService>();
 builder.Services.AddScoped<JwtAuth>();
+builder.Services.AddScoped<IEmailService, FakeEmailService>();
 // Database
 builder.Services.AddDbContext<DistanceTrackerContext>(options => options.UseSqlite("Data Source=distancetracker.db"));
 var redisConnectionString = builder.Configuration.GetSection("Redis")["ConnectionString"];
