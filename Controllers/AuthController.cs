@@ -6,8 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using System.Data.SqlTypes;
-using System.Security.Claims;
+
 
 namespace DistanceTracker.API.Controllers
 {
@@ -27,7 +26,8 @@ namespace DistanceTracker.API.Controllers
         private async Task<IdentityResult> PasswordValidatorAsync(string password)
         {
             var passwordValidator = new PasswordValidator<ApplicationUser>();
-            return await passwordValidator.ValidateAsync(_userManager, null!, password);
+            var tempUser = new ApplicationUser();
+            return await passwordValidator.ValidateAsync(_userManager, tempUser, password);
         }
 
         [EnableRateLimiting("RegisterPolicy")]
@@ -43,7 +43,7 @@ namespace DistanceTracker.API.Controllers
             var user = new ApplicationUser
             {
                 UserName = dto.UserName,
-                Email = dto.Email,
+                Email = dto.Email.Trim().ToLowerInvariant(),
                 Trips = [],
                 EmailConfirmed = false,
             };
@@ -70,10 +70,15 @@ namespace DistanceTracker.API.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginUserDTO dto)
         {
+            dto.Email = dto.Email.Trim().ToLowerInvariant();
             var user = await _userManager.FindByEmailAsync(dto.Email);
             if (user == null)
             {
                 return Unauthorized("Invalid email or password.");
+            }
+            if(!user.EmailConfirmed)
+            {
+                return Unauthorized("Email not confirmed. Please confirm your email before logging in.");
             }
             var passwordValid = await _userManager.CheckPasswordAsync(user, dto.Password);
             if (!passwordValid)
@@ -92,9 +97,12 @@ namespace DistanceTracker.API.Controllers
             };
             return Ok(userDto);
         }
+        [EnableRateLimiting("EmailPolicy")]
         [HttpPost("forgot-password")]
+        [AllowAnonymous]
         public async Task<IActionResult> ForgotPassword(ForgotPasswordDTO Dto)
         {
+            Dto.Email = Dto.Email.Trim().ToLowerInvariant();
             var user = await _userManager.FindByEmailAsync(Dto.Email);
 
             if (user != null)
@@ -111,11 +119,14 @@ namespace DistanceTracker.API.Controllers
             }
 
             // Always return OK to prevent account enumeration
-            return Ok("If the email exists, a reset email has been sent.");
+            return Ok("A confirmation email has been sent.");
         }
+        [EnableRateLimiting("EmailPolicy")]
         [HttpPost("reset-password")]
+        [AllowAnonymous]
         public async Task<IActionResult> ResetPassword(ResetPasswordDTO dto)
         {
+            dto.Email = dto.Email.Trim().ToLowerInvariant();
             var user = await _userManager.FindByEmailAsync(dto.Email);
             if (user == null)
             {
@@ -127,12 +138,9 @@ namespace DistanceTracker.API.Controllers
             {
                 return Ok("Password reset successful.");
             }
-            else
-            {
-                var errors = result.Errors.Select(e => e.Description).ToList();
-                return BadRequest(errors);
-            }
+            return BadRequest("Invalid email or token.");
         }
+        [EnableRateLimiting("EmailPolicy")]
         [HttpPost("confirm-email")]
         [AllowAnonymous]
         public async Task<IActionResult> ConfirmEmail(ConfirmEmailDTO dto)
@@ -147,11 +155,7 @@ namespace DistanceTracker.API.Controllers
             {
                 return Ok("Email confirmed successfully.");
             }
-            else
-            {
-                var errors = result.Errors.Select(e => e.Description).ToList();
-                return BadRequest("Invalid or expired toekn");
-            }
+            return BadRequest("Invalid email or token.");
         }
 
     }
