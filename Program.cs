@@ -57,7 +57,26 @@ builder.Services.AddScoped<IEmailService, FakeEmailService>();
 // Database
 builder.Services.AddDbContext<DistanceTrackerContext>(options => options.UseSqlite("Data Source=distancetracker.db"));
 var redisConnectionString = builder.Configuration.GetSection("Redis")["ConnectionString"];
-builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConnectionString!));
+
+if (!string.IsNullOrEmpty(redisConnectionString))
+{
+    try
+    {
+        var redis = ConnectionMultiplexer.Connect(redisConnectionString);
+        builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
+        Console.WriteLine(" Redis connected");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($" Redis connection failed: {ex.Message}");
+        Console.WriteLine("Continuing without Redis...");
+        // Don't register Redis service
+    }
+}
+else
+{
+    Console.WriteLine(" Redis not configured, skipping...");
+}
 // add Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
@@ -126,8 +145,8 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: partitionKey,
             factory: partition => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 3,
-                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(5),
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             });
@@ -152,19 +171,28 @@ builder.Services.AddRateLimiter(options =>
         return new ValueTask( context.HttpContext.Response.WriteAsync("Too many requests. Please try again later.", token));
     };
 });
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        policy => policy
+            .AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+});
 var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.UseCors("AllowAll");
 }
 
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
-
+app.UseRateLimiter();
 app.MapControllers();
 
 app.Run();

@@ -1,5 +1,6 @@
 ﻿using DistanceTracker.API.DTOs;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 using System.Text.Json;
 
@@ -10,7 +11,7 @@ namespace DistanceTracker.API.Services
         private readonly HttpClient _httpClient;
         private readonly string _baseUrl;
         private readonly IConnectionMultiplexer _redis;
-        public NominatimGeocodingService(HttpClient httpClient, IConfiguration configuration, IConnectionMultiplexer redis)
+        public NominatimGeocodingService(HttpClient httpClient, IConfiguration configuration, IServiceProvider service)
         {
             _httpClient = httpClient;
             _baseUrl = configuration["ExternalApis:Nominatim:BaseUrl"]
@@ -20,22 +21,27 @@ namespace DistanceTracker.API.Services
             var userAgent = configuration["ExternalApis:Nominatim:UserAgent"]
                 ?? throw new ArgumentNullException("Nominatim UserAgent not configured");
             _httpClient.DefaultRequestHeaders.Add("User-Agent", userAgent);
-            _redis= redis;
+            var redis = service.GetService<IConnectionMultiplexer>();
+            _redis = redis;
         }
         public async Task<(decimal Latitude, decimal Longitude)> GeocodeAddressAsync(string address)
         {
-            var db = _redis.GetDatabase();
-            var normalized = address.Trim().ToLowerInvariant();
-            var key = $"geocode:{normalized}";
-            RedisValue cached= await db.StringGetAsync(key);
-            if(cached.HasValue)
+            if(_redis != null)
             {
-                var cachedResult= JsonSerializer.Deserialize<GeoCacheDTO>(cached.ToString());
-                if(cachedResult != null)
+                var db = _redis.GetDatabase();
+                var normalized = address.Trim().ToLowerInvariant();
+                var key = $"geocode:{normalized}";
+                RedisValue cached = await db.StringGetAsync(key);
+                if (cached.HasValue)
                 {
-                    return (cachedResult.Latitude,cachedResult.Longitude);
+                    var cachedResult = JsonSerializer.Deserialize<GeoCacheDTO>(cached.ToString());
+                    if (cachedResult != null)
+                    {
+                        return (cachedResult.Latitude, cachedResult.Longitude);
+                    }
                 }
             }
+            
             //Url encode and make url
             var encodedAddress = Uri.EscapeDataString(address);
             var url = $"{_baseUrl}/search?q={encodedAddress}&format=json&limit=1";
@@ -52,7 +58,13 @@ namespace DistanceTracker.API.Services
                 var resultTuple = (lat, lon);
                 var cacheDto = new GeoCacheDTO { Latitude = lat, Longitude = lon };
                 var serializedResult = JsonSerializer.Serialize(cacheDto);
-                await db.StringSetAsync(key, serializedResult, TimeSpan.FromDays(1));
+                if(_redis != null)
+                {
+                    var db = _redis.GetDatabase();
+                    var normalized = address.Trim().ToLowerInvariant();
+                    var key = $"geocode:{normalized}";
+                    await db.StringSetAsync(key, serializedResult, TimeSpan.FromDays(1));
+                }
                 return resultTuple;
             }
             throw new Exception("Geocoding failed for address: " + address);
