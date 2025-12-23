@@ -54,6 +54,7 @@ builder.Services.AddScoped<IGeocodingService, NominatimGeocodingService>();
 builder.Services.AddScoped<IDistanceService, OpenRouteDistanceService>();
 builder.Services.AddScoped<JwtAuth>();
 builder.Services.AddScoped<IEmailService, FakeEmailService>();
+builder.Services.AddScoped<ITripCalculationPolicy, EnsureCalcTwoTier>();
 // Database
 builder.Services.AddDbContext<DistanceTrackerContext>(options => options.UseSqlite("Data Source=distancetracker.db"));
 var redisConnectionString = builder.Configuration.GetSection("Redis")["ConnectionString"];
