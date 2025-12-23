@@ -42,7 +42,7 @@ namespace DistanceTracker.API.Controllers
             {
                 Id = tripId,
                 DateUTC = dto.Date.ToUniversalTime(),
-                TotalDistance = 0,
+                TotalDistance = null,
                 TripStops = new List<TripStop>(),
                 UserId = userId
             };
@@ -93,6 +93,83 @@ namespace DistanceTracker.API.Controllers
 
             };
             return CreatedAtAction(nameof(GetTrip), new { id = trip.Id }, response);
+        }
+        [EnableRateLimiting("TripsWritePolicy")]
+        [HttpPut("{id}")]
+        public async Task<ActionResult<TripResponseDTO>> EditTrip(Guid id, CreateTripDto dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var tripId = id;
+            if (userId == null)
+            {
+                return Unauthorized();
+            }
+            var trip = await _context.Trips.Include(t => t.TripStops)
+                .FirstOrDefaultAsync (t => t.Id == tripId && t.UserId == userId);
+            if (trip == null)
+            {
+                return NotFound();
+            }
+            trip.TotalDistance = null;
+            trip.LastCalculatedAtUTC = null;
+            _context.TripStops.RemoveRange(trip.TripStops);
+            trip.TripStops.Clear();
+            for (int i = 0; i < dto.Stops.Count; i++)
+            {
+                var address = dto.Stops[i].Trim().ToLowerInvariant();
+                var (latitude, longitude) = await _geocodingService.GeocodeAddressAsync(address);
+                var tripStop = new TripStop
+                {
+                    Id = Guid.NewGuid(),
+                    TripId = tripId,
+                    Address = dto.Stops[i],
+                    Latitude = latitude,
+                    Longitude = longitude,
+                    DistanceToNext = null,
+                    Order = i,
+                };
+                trip.TripStops.Add(tripStop);
+            }
+            await _context.SaveChangesAsync();
+            var response = new TripResponseDTO
+            {
+                Id = trip.Id,
+                Date = trip.DateUTC,
+                TotalDistance = trip.TotalDistance,
+                Notes = trip.Notes,
+                Stops = trip.TripStops.Select(s => new TripStopDTO
+                {
+                    Id = s.Id,
+                    Address = s.Address,
+                    Latitude = s.Latitude,
+                    Longitude = s.Longitude,
+                    Order = s.Order,
+                    DistanceToNext = s.DistanceToNext
+                }).ToList(),
+
+            };
+            return Ok(response);
+        }
+        [EnableRateLimiting("TripsWritePolicy")]
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteTrip(Guid id)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var tripId = id;
+            if (userId == null)
+            {
+                return Unauthorized();
+            }
+            var trip = await _context.Trips.Include(t => t.TripStops)
+                .FirstOrDefaultAsync(t => t.Id == tripId && t.UserId == userId);
+            if (trip == null)
+            {
+                return NotFound();
+            }
+            _context.Trips.Remove(trip);
+            await _context.SaveChangesAsync();
+            return NoContent();
+
         }
         [EnableRateLimiting("TripsWritePolicy")]
         [HttpPost("{id}/calculate")]

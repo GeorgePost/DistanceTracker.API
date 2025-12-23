@@ -4,7 +4,7 @@
     {
         public Guid Id { get; set; }
         public DateTime DateUTC { get; set; }
-        public decimal TotalDistance { get; set; }
+        public decimal? TotalDistance { get; set; } = null;
         public string? Notes { get; set; }
         public DateTime? LastCalculatedAtUTC { get; set; }
 
