@@ -110,27 +110,18 @@ namespace DistanceTracker.API.Controllers
             {
                 return NotFound();
             }
+            //updating trip details
+            trip.DateUTC = dto.Date.ToUniversalTime();
             trip.TotalDistance = null;
             trip.LastCalculatedAtUTC = null;
-            _context.TripStops.RemoveRange(trip.TripStops);
-            trip.TripStops.Clear();
-            for (int i = 0; i < dto.Stops.Count; i++)
-            {
-                var address = dto.Stops[i].Trim().ToLowerInvariant();
-                var (latitude, longitude) = await _geocodingService.GeocodeAddressAsync(address);
-                var tripStop = new TripStop
-                {
-                    Id = Guid.NewGuid(),
-                    TripId = tripId,
-                    Address = dto.Stops[i],
-                    Latitude = latitude,
-                    Longitude = longitude,
-                    DistanceToNext = null,
-                    Order = i,
-                };
-                trip.TripStops.Add(tripStop);
-            }
+
+            // Synchronize trip stops
+            await SynchronizeTripStops(trip, dto.Stops);
+
             await _context.SaveChangesAsync();
+            //trip = await _context.Trips
+            //    .Include(t => t.TripStops)
+            //    .FirstAsync(t => t.Id == id);
             var response = new TripResponseDTO
             {
                 Id = trip.Id,
@@ -149,6 +140,51 @@ namespace DistanceTracker.API.Controllers
 
             };
             return Ok(response);
+        }
+        private async Task SynchronizeTripStops(Trip trip, List<string> newAddresses)
+        {
+            var existingStops = trip.TripStops.ToList();
+
+            // Remove stops that are no longer in the new list
+            for (int i = existingStops.Count - 1; i >= 0; i--)
+            {
+                if (i >= newAddresses.Count)
+                {
+                    _context.TripStops.Remove(existingStops[i]);
+                }
+            }
+
+            // Update existing stops or add new ones
+            for (int i = 0; i < newAddresses.Count; i++)
+            {
+                var address = newAddresses[i].Trim();
+                var (lat, lon) = await _geocodingService.GeocodeAddressAsync(address.ToLowerInvariant());
+
+                if (i < existingStops.Count)
+                {
+                    // Update existing stop
+                    var stop = existingStops[i];
+                    stop.Address = address;
+                    stop.Latitude = lat;
+                    stop.Longitude = lon;
+                    stop.Order = i;
+                    stop.DistanceToNext = null;
+                }
+                else
+                {
+                    // Add new stop
+                    trip.TripStops.Add(new TripStop
+                    {
+                        Id = Guid.NewGuid(),
+                        TripId = trip.Id,
+                        Address = address,
+                        Latitude = lat,
+                        Longitude = lon,
+                        Order = i,
+                        DistanceToNext = null
+                    });
+                }
+            }
         }
         [EnableRateLimiting("TripsWritePolicy")]
         [HttpDelete("{id}")]
@@ -212,6 +248,7 @@ namespace DistanceTracker.API.Controllers
             }
             return NoContent();
         }
+
         [HttpGet("{id}")]
         public async Task<ActionResult<TripResponseDTO>> GetTrip(Guid id)
         {

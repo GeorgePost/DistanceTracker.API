@@ -56,7 +56,8 @@ builder.Services.AddScoped<JwtAuth>();
 builder.Services.AddScoped<IEmailService, FakeEmailService>();
 builder.Services.AddScoped<ITripCalculationPolicy, EnsureCalcTwoTier>();
 // Database
-builder.Services.AddDbContext<DistanceTrackerContext>(options => options.UseSqlite("Data Source=distancetracker.db"));
+builder.Services.AddDbContext<DistanceTrackerContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 var redisConnectionString = builder.Configuration.GetSection("Redis")["ConnectionString"];
 
 if (!string.IsNullOrEmpty(redisConnectionString))
