@@ -5,8 +5,10 @@ using DistanceTracker.API.Services.Email;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using SendGrid;
 using StackExchange.Redis;
 using System;
 using System.Collections.Concurrent;
@@ -50,10 +52,17 @@ builder.Services.AddSwaggerGen(c =>
 });
 // Add HttpClient and Geocoding Service
 builder.Services.AddHttpClient();
+builder.Services.Configure<SendGridOptions>(builder.Configuration.GetSection("SendGrid"));
+builder.Services.AddSingleton<ISendGridClient>(sp =>
+{
+    var options = sp.GetRequiredService<IOptions<SendGridOptions>>().Value;
+    Console.Write(options.ApiKey);
+    return new SendGridClient(options.ApiKey);
+});
 builder.Services.AddScoped<IGeocodingService, NominatimGeocodingService>();
 builder.Services.AddScoped<IDistanceService, OpenRouteDistanceService>();
 builder.Services.AddScoped<JwtAuth>();
-builder.Services.AddScoped<IEmailService, FakeEmailService>();
+builder.Services.AddScoped<IEmailService, SendGridEmailService>();
 builder.Services.AddScoped<ITripCalculationPolicy, EnsureCalcTwoTier>();
 // Database
 builder.Services.AddDbContext<DistanceTrackerContext>(options =>
@@ -132,8 +141,8 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: partitionKey,
             factory: partition => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 1,
-                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(10),
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             });

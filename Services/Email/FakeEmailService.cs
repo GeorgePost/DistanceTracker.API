@@ -1,4 +1,6 @@
 ﻿
+using DistanceTracker.API.Models;
+
 namespace DistanceTracker.API.Services.Email
 {
     public class FakeEmailService : IEmailService
@@ -22,6 +24,23 @@ namespace DistanceTracker.API.Services.Email
                 toEmail,
                 subject,
                 body
+            );
+            return Task.CompletedTask;
+        }
+        public Task SendEmailConfirmationAsync(ApplicationUser user,string token)
+        {
+            _logger.LogInformation(
+                """
+                ===== FAKE EMAIL SENT =====
+                To: {To}
+                Subject: {Subject}
+                Body:
+                {Body}
+                ==========================
+                """,
+                user.Email,
+                "Confirm Your Email",
+                $"Your token is {token}"
             );
             return Task.CompletedTask;
         }

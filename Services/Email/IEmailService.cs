@@ -1,4 +1,6 @@
-﻿namespace DistanceTracker.API.Services.Email
+﻿using DistanceTracker.API.Models;
+
+namespace DistanceTracker.API.Services.Email
 {
     public interface IEmailService
     {
@@ -7,5 +9,6 @@
             string subject, 
             string body
             );
+        Task SendEmailConfirmationAsync(ApplicationUser user, string token);
     }
 }

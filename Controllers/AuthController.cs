@@ -52,10 +52,9 @@ namespace DistanceTracker.API.Controllers
             if (result.Succeeded)
             {
                 var token = await  _userManager.GenerateEmailConfirmationTokenAsync(user);
-                await _emailService.SendEmailAsync(
-                    user.Email!,
-                    "Confirm your email",
-                    $"Your confirmation token:\n\n{token}"
+                await _emailService.SendEmailConfirmationAsync(
+                    user,
+                    token
                 );
                 return Ok("If the Email exists, a confirmation has been sent.");
             }
