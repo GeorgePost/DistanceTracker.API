@@ -44,5 +44,22 @@ namespace DistanceTracker.API.Services.Email
             );
             return Task.CompletedTask;
         }
+        public Task SendPasswordResetAsync(ApplicationUser user, string token)
+        {
+            _logger.LogInformation(
+                """
+                ===== FAKE EMAIL SENT =====
+                To: {To}
+                Subject: {Subject}
+                Body:
+                {Body}
+                ==========================
+                """,
+                user.Email,
+                "Forgot Password - DistanceTracker",
+                $"Your reset token:\n\n{token}"
+            );
+            return Task.CompletedTask;
+        }
     }
 }

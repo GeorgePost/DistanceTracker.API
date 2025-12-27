@@ -42,7 +42,7 @@ namespace DistanceTracker.API.Controllers
             }
             var user = new ApplicationUser
             {
-                UserName = dto.UserName,
+                UserName = dto.Email.Trim().ToLowerInvariant(),
                 Email = dto.Email.Trim().ToLowerInvariant(),
                 Trips = [],
                 EmailConfirmed = false,
@@ -89,7 +89,6 @@ namespace DistanceTracker.API.Controllers
             {
                 User= new ApplicationUserDTO{
                     UserId = Guid.Parse(user.Id),
-                    UserName = user.UserName,
                     UserEmail = user.Email,
                 },
                 Token= token
@@ -110,11 +109,7 @@ namespace DistanceTracker.API.Controllers
 
                 // TODO: Send token via email (SendGrid / Azure Email)
                 // For now: log or temporarily return it in dev
-                await _emailService.SendEmailAsync(
-                    user.Email!,
-                    "Reset your password",
-                    $"Your reset token:\n\n{token}"
-                );
+                await _emailService.SendPasswordResetAsync(user, token);
             }
 
             // Always return OK to prevent account enumeration

@@ -10,5 +10,6 @@ namespace DistanceTracker.API.Services.Email
             string body
             );
         Task SendEmailConfirmationAsync(ApplicationUser user, string token);
+        Task SendPasswordResetAsync(ApplicationUser user, string token);
     }
 }

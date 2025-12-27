@@ -54,5 +54,39 @@ namespace DistanceTracker.API.Services.Email
                 throw new Exception($"SendGrid failed: {response.StatusCode}, {error}");
             }
         }
+        public async Task SendPasswordResetAsync(ApplicationUser user, string token)
+        {
+            var frontendUrl = _config.GetSection("Frontend")["BaseUrl"]
+                ?? throw new ArgumentNullException("Frontend:BaseUrl not configured");
+
+            var resetLink =
+                $"{frontendUrl}/reset-password?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+
+            var subject = "Reset Your Password";
+            var body = $@"
+                <p>Hi,</p>
+                <p>You requested a password reset.</p>
+                <p>Click the link below to reset your password:</p>
+                <p><a href=""{resetLink}"">Reset Password</a></p>
+                <p>If you did not request this, you can safely ignore this email.</p>
+                <p>– {_options.FromName}</p>
+            ";
+
+            var msg = new SendGridMessage
+            {
+                From = new EmailAddress(_options.SenderEmail, _options.FromName),
+                Subject = subject,
+                HtmlContent = body
+            };
+
+            msg.AddTo(new EmailAddress(user.Email!));
+
+            var response = await _sendGridClient.SendEmailAsync(msg);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Body.ReadAsStringAsync();
+                throw new Exception($"SendGrid failed: {response.StatusCode}, {error}");
+            }
+        }
     }
 }
