@@ -53,12 +53,14 @@ builder.Services.AddSwaggerGen(c =>
 // Add HttpClient and Geocoding Service
 builder.Services.AddHttpClient();
 builder.Services.Configure<SendGridOptions>(builder.Configuration.GetSection("SendGrid"));
+
 builder.Services.AddSingleton<ISendGridClient>(sp =>
 {
     var options = sp.GetRequiredService<IOptions<SendGridOptions>>().Value;
-    Console.Write(options.ApiKey);
     return new SendGridClient(options.ApiKey);
 });
+builder.Services.Configure<StripeOptions>(builder.Configuration.GetSection("Stripe"));
+
 builder.Services.AddScoped<IGeocodingService, NominatimGeocodingService>();
 builder.Services.AddScoped<IDistanceService, OpenRouteDistanceService>();
 builder.Services.AddScoped<JwtAuth>();
