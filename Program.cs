@@ -2,6 +2,7 @@ using DistanceTracker.API.Data;
 using DistanceTracker.API.Models;
 using DistanceTracker.API.Services;
 using DistanceTracker.API.Services.Email;
+using DistanceTracker.API.Services.Payments;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -208,6 +209,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
     app.UseCors("AllowAll");
+}
+// Ensure Stripe is configured in Production
+if (app.Environment.IsProduction())
+{
+    var stripeKey = app.Configuration["Stripe:SecretKey"];
+    if (string.IsNullOrWhiteSpace(stripeKey))
+        throw new InvalidOperationException("Stripe is not configured.");
 }
 
 app.UseHttpsRedirection();

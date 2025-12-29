@@ -1,4 +1,4 @@
-﻿namespace DistanceTracker.API.Services
+﻿namespace DistanceTracker.API.Services.Payments
 {
     public class StripeOptions
     {
