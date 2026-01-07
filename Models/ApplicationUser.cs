@@ -12,5 +12,7 @@ namespace DistanceTracker.API.Models
     {
         public List<Trip> Trips { get; set; } = new();
         public UserTier Tier { get; set; } = UserTier.Free;
+        public string? StripeCustomerId { get; set; }
+        public string? StripeSubscriptionId { get; set; }
     }
 }

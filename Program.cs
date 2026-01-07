@@ -11,8 +11,6 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using SendGrid;
 using StackExchange.Redis;
-using System;
-using System.Collections.Concurrent;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
@@ -51,8 +49,10 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 });
-// Add HttpClient and Geocoding Service
+// Add HttpClient
 builder.Services.AddHttpClient();
+
+// Configure Email Service
 builder.Services.Configure<SendGridOptions>(builder.Configuration.GetSection("SendGrid"));
 
 builder.Services.AddSingleton<ISendGridClient>(sp =>
@@ -60,8 +60,11 @@ builder.Services.AddSingleton<ISendGridClient>(sp =>
     var options = sp.GetRequiredService<IOptions<SendGridOptions>>().Value;
     return new SendGridClient(options.ApiKey);
 });
+// Configuring Stripe Stripe
+Stripe.StripeConfiguration.ApiKey =
+    builder.Configuration["Stripe:SecretKey"];
 builder.Services.Configure<StripeOptions>(builder.Configuration.GetSection("Stripe"));
-
+//Configuring Services
 builder.Services.AddScoped<IGeocodingService, NominatimGeocodingService>();
 builder.Services.AddScoped<IDistanceService, OpenRouteDistanceService>();
 builder.Services.AddScoped<JwtAuth>();
