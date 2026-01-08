@@ -2,7 +2,6 @@ using DistanceTracker.API.Data;
 using DistanceTracker.API.Models;
 using DistanceTracker.API.Services;
 using DistanceTracker.API.Services.Email;
-using DistanceTracker.API.Services.Payments;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -63,7 +62,6 @@ builder.Services.AddSingleton<ISendGridClient>(sp =>
 // Configuring Stripe Stripe
 Stripe.StripeConfiguration.ApiKey =
     builder.Configuration["Stripe:SecretKey"];
-builder.Services.Configure<StripeOptions>(builder.Configuration.GetSection("Stripe"));
 //Configuring Services
 builder.Services.AddScoped<IGeocodingService, NominatimGeocodingService>();
 builder.Services.AddScoped<IDistanceService, OpenRouteDistanceService>();

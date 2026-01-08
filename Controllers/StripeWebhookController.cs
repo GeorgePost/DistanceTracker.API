@@ -1,6 +1,7 @@
 ﻿using DistanceTracker.API.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace DistanceTracker.API.Controllers
 {
@@ -31,8 +32,11 @@ namespace DistanceTracker.API.Controllers
                 if (stripeEvent.Type == "checkout.session.completed")
                 {
                     var session = stripeEvent.Data.Object as Stripe.Checkout.Session;
-                    var userId = session.Metadata["userId"];
-                    var user = await _userManager.FindByIdAsync(userId);
+                    if (session?.Metadata == null || !session.Metadata.TryGetValue("userId", out var userId))
+                    {
+                        return Ok(); // Don't fail webhook
+                    }
+                    var user = await _userManager.FindByIdAsync(session.Metadata["userId"]);
                     if (user != null)
                     {
                         user.Tier = UserTier.Paid;
@@ -42,12 +46,25 @@ namespace DistanceTracker.API.Controllers
                     }
                     else
                     {
-                        // Log:user not found
+                        return BadRequest("Invalid Stripe Signature");
                     }
                 }
                 if (stripeEvent.Type == "customer.subscription.deleted")
                 {
-                    // Handle subscription cancellation
+                    var subscription = stripeEvent.Data.Object as Stripe.Subscription;
+                    var user = await _userManager.Users
+                        .FirstOrDefaultAsync(u => u.StripeSubscriptionId == subscription.Id);
+
+                    if (user != null)
+                    {
+                        user.Tier = UserTier.Free;
+                        user.StripeSubscriptionId = null;
+                        await _userManager.UpdateAsync(user);
+                    }
+                    else
+                    {
+                        return BadRequest("Invalid Stripe Signature");
+                    }
                 }
                 return Ok();
             }
