@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Resend;
 using SendGrid;
 using StackExchange.Redis;
 using System.Security.Claims;
@@ -52,13 +53,13 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddHttpClient();
 
 // Configure Email Service
-builder.Services.Configure<SendGridOptions>(builder.Configuration.GetSection("SendGrid"));
-
-builder.Services.AddSingleton<ISendGridClient>(sp =>
+builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Resend"));
+builder.Services.Configure<ResendClientOptions>(options =>
 {
-    var options = sp.GetRequiredService<IOptions<SendGridOptions>>().Value;
-    return new SendGridClient(options.ApiKey);
+    options.ApiToken = builder.Configuration["Resend:ApiKey"]!;
 });
+builder.Services.AddHttpClient<ResendClient>();
+builder.Services.AddTransient<IResend, ResendClient>();
 // Configuring Stripe Stripe
 Stripe.StripeConfiguration.ApiKey =
     builder.Configuration["Stripe:SecretKey"];
@@ -66,7 +67,7 @@ Stripe.StripeConfiguration.ApiKey =
 builder.Services.AddScoped<IGeocodingService, NominatimGeocodingService>();
 builder.Services.AddScoped<IDistanceService, OpenRouteDistanceService>();
 builder.Services.AddScoped<JwtAuth>();
-builder.Services.AddScoped<IEmailService, SendGridEmailService>();
+builder.Services.AddScoped<IEmailService, ResendEmailService>();
 builder.Services.AddScoped<ITripCalculationPolicy, EnsureCalcTwoTier>();
 // Database
 builder.Services.AddDbContext<DistanceTrackerContext>(options =>
