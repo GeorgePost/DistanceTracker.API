@@ -1,9 +1,11 @@
 using DistanceTracker.API.Data;
+using DistanceTracker.API.Services.Billing;
 using DistanceTracker.API.Models;
 using DistanceTracker.API.Services;
 using DistanceTracker.API.Services.Email;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -14,6 +16,24 @@ using StackExchange.Redis;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
+var postgresConnection = builder.Configuration.GetConnectionString("Postgres");
+if (string.IsNullOrWhiteSpace(postgresConnection))
+    throw new InvalidOperationException("ConnectionStrings:Postgres must be configured (environment: ConnectionStrings__Postgres).");
+
+// Explicit maintenance command; never migrate automatically at API startup.
+if (args.Contains("--migrate"))
+{
+    var options = new DbContextOptionsBuilder<DistanceTrackerContext>()
+        .UseNpgsql(postgresConnection).Options;
+    await using var context = new DistanceTrackerContext(options);
+    await context.Database.MigrateAsync();
+    return;
+}
+
+var dataProtection = builder.Services.AddDataProtection();
+var keyPath = builder.Configuration["DataProtection:KeyPath"];
+if (!string.IsNullOrWhiteSpace(keyPath))
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyPath));
 // Access AppSettings
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 string secretKey = jwtSettings["SigningKey"] ?? throw new ArgumentNullException("JWT SecretKey not configured");
@@ -60,18 +80,38 @@ builder.Services.Configure<ResendClientOptions>(options =>
 });
 builder.Services.AddHttpClient<ResendClient>();
 builder.Services.AddTransient<IResend, ResendClient>();
-// Configuring Stripe Stripe
-Stripe.StripeConfiguration.ApiKey =
-    builder.Configuration["Stripe:SecretKey"];
+// Billing uses an injected client so tests never need real Stripe requests.
+builder.Services.AddOptions<StripeSettings>().BindConfiguration("Stripe").ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<StripeSettings>, StripeSettingsValidator>();
+builder.Services.AddSingleton<Stripe.IStripeClient>(sp =>
+{
+    var billing = sp.GetRequiredService<IOptions<StripeSettings>>().Value;
+    return new Stripe.StripeClient(billing.Enabled ? billing.SecretKey : "sk_test_billing_disabled");
+});
+builder.Services.AddScoped<IStripeGateway, StripeGateway>();
+builder.Services.AddScoped<BillingService>();
+builder.Services.AddSingleton<StripeWebhookVerifier>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHostedService<StripeStartupCheck>();
 //Configuring Services
 builder.Services.AddScoped<IGeocodingService, NominatimGeocodingService>();
 builder.Services.AddScoped<IDistanceService, OpenRouteDistanceService>();
 builder.Services.AddScoped<JwtAuth>();
-builder.Services.AddScoped<IEmailService, ResendEmailService>();
+// Explicit development-only mode for disposable database tests without sending email.
+if (builder.Configuration.GetValue<bool>("Email:UseFake"))
+{
+    if (!builder.Environment.IsDevelopment())
+        throw new InvalidOperationException("Email:UseFake is only allowed in Development.");
+    builder.Services.AddScoped<IEmailService, FakeEmailService>();
+}
+else
+{
+    builder.Services.AddScoped<IEmailService, ResendEmailService>();
+}
 builder.Services.AddScoped<ITripCalculationPolicy, EnsureCalcTwoTier>();
 // Database
 builder.Services.AddDbContext<DistanceTrackerContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+    options.UseNpgsql(postgresConnection));
 var redisConnectionString = builder.Configuration.GetSection("Redis")["ConnectionString"];
 
 if (!string.IsNullOrEmpty(redisConnectionString))
@@ -205,6 +245,27 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod());
 });
 var app = builder.Build();
+// This maintenance command never starts HTTP or creates Stripe resources.
+var recoveryIndex = Array.IndexOf(args, "--recover-stripe-customer");
+if (recoveryIndex >= 0)
+{
+    if (recoveryIndex + 1 >= args.Length || args[recoveryIndex + 1].StartsWith("--"))
+    {
+        Console.Error.WriteLine("Usage: --recover-stripe-customer USER_ID [--confirmed-no-customer]");
+        Environment.ExitCode = 1;
+        return;
+    }
+    await using var scope = app.Services.CreateAsyncScope();
+    try
+    {
+        Console.WriteLine(await scope.ServiceProvider.GetRequiredService<BillingService>().RecoverCustomerAsync(
+            args[recoveryIndex + 1], args.Contains("--confirmed-no-customer"), CancellationToken.None));
+    }
+    catch (BillingConflictException ex) { Console.Error.WriteLine(ex.Message); Environment.ExitCode = 1; }
+    catch (BillingUserNotFoundException) { Console.Error.WriteLine("Application user not found."); Environment.ExitCode = 1; }
+    catch (Exception ex) { Console.Error.WriteLine($"Billing recovery failed ({ex.GetType().Name}). Check configuration and provider connectivity."); Environment.ExitCode = 1; }
+    return;
+}
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -212,14 +273,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
     app.UseCors("AllowAll");
 }
-// Ensure Stripe is configured in Production
-if (app.Environment.IsProduction())
-{
-    var stripeKey = app.Configuration["Stripe:SecretKey"];
-    if (string.IsNullOrWhiteSpace(stripeKey))
-        throw new InvalidOperationException("Stripe is not configured.");
-}
-
 app.UseHttpsRedirection();
 
 app.UseAuthentication();

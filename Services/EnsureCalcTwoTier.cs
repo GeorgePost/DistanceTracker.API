@@ -1,4 +1,4 @@
-﻿using DistanceTracker.API.Data;
+using DistanceTracker.API.Data;
 using DistanceTracker.API.Models;
 using Microsoft.EntityFrameworkCore;
 namespace DistanceTracker.API.Services
@@ -12,7 +12,7 @@ namespace DistanceTracker.API.Services
         }
         public async Task EnsureCanCalculateAsync(ApplicationUser User)
         {
-            if(User.Tier == UserTier.Paid)
+            if(User.Tier == UserTier.Paid && !string.IsNullOrWhiteSpace(User.StripeCustomerId))
             {
                 return;
             }

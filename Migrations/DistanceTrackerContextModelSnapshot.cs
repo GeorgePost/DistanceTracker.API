@@ -67,10 +67,40 @@ namespace DistanceTracker.API.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
 
+                    b.Property<bool>("StripeCancelAtPeriodEnd")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("StripeCheckoutGeneration")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StripeCheckoutSessionId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("StripeCurrentPeriodEndUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("StripeCustomerCreationAttemptId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("StripeCustomerCreationEmail")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("StripeCustomerCreationNeedsReview")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("StripeCustomerCreationStartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("StripeCustomerId")
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("StripeLastSyncedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("StripeSubscriptionId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("StripeSubscriptionStatus")
                         .HasColumnType("text");
 
                     b.Property<int>("Tier")
@@ -92,7 +122,29 @@ namespace DistanceTracker.API.Migrations
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
 
+                    b.HasIndex("StripeCustomerId")
+                        .IsUnique();
+
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("DistanceTracker.API.Models.ProcessedStripeEvent", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ProcessedStripeEvents");
                 });
 
             modelBuilder.Entity("DistanceTracker.API.Models.Trip", b =>

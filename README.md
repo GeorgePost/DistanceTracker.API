@@ -194,13 +194,15 @@ Requires a valid JWT.
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| `POST` | `/api/payments/create-checkout` | Creates a Stripe Checkout session for the Pro subscription. Returns the hosted checkout URL. |
+| `POST` | `/api/payments/create-checkout` | Creates or reuses Checkout; blocks duplicate subscriptions. Returns the hosted URL. |
+| `GET` | `/api/payments/subscription` | Reconciles and returns subscription status and access. |
+| `POST` | `/api/payments/create-portal` | Returns the authenticated user's Customer Portal URL. |
 
 ### Webhooks
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| `POST` | `/api/webhooks/stripe` | Receives Stripe events. Handles `checkout.session.completed` (upgrades user to Paid tier) and `customer.subscription.deleted` (downgrades back to Free). Signature verified against `Stripe:WebhookSecret`. |
+| `POST` | `/api/webhooks/stripe` | Verifies signatures, reconciles subscription/payment lifecycle events and records receipts atomically. See [STRIPE.md](STRIPE.md). |
 
 ---
 
@@ -237,3 +239,5 @@ All sensitive endpoints are protected by fixed-window rate limiters partitioned 
 | `RegisterPolicy` | `POST /api/auth/register` | 5 requests / 10 min |
 | `EmailPolicy` | `forgot-password`, `reset-password`, `confirm-email` | 2 requests / 1 min |
 | `TripsWritePolicy` | `POST`, `PUT`, `DELETE`, `/calculate` on trips | 5 requests / 1 min |
+
+For subscription lifecycle, management endpoints, access policy, migration, tests and Stripe-side setup, see [STRIPE.md](STRIPE.md).

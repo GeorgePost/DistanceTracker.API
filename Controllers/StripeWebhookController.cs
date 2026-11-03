@@ -1,79 +1,40 @@
-﻿using DistanceTracker.API.Models;
-using Microsoft.AspNetCore.Identity;
+using DistanceTracker.API.Services.Billing;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
-namespace DistanceTracker.API.Controllers
+namespace DistanceTracker.API.Controllers;
+
+[ApiController]
+[AllowAnonymous]
+[Route("api/webhooks/stripe")]
+public sealed class StripeWebhookController(BillingService billing, StripeWebhookVerifier verifier,
+    IOptions<StripeSettings> settings, ILogger<StripeWebhookController> logger) : ControllerBase
 {
-    [ApiController]
-    [Route("api/webhooks/stripe")]
-    public class StripeWebhookController : ControllerBase
+    [HttpPost]
+    [RequestSizeLimit(1024 * 1024)]
+    public async Task<IActionResult> Handle(CancellationToken ct)
     {
-        private readonly string _webhookSecret;
-        private readonly UserManager<ApplicationUser> _userManager;
-        public StripeWebhookController(IConfiguration configuration, UserManager<ApplicationUser> userManager)
+        if (!settings.Value.Enabled) return StatusCode(503);
+        var signature = Request.Headers["Stripe-Signature"].ToString();
+        if (string.IsNullOrWhiteSpace(signature)) return BadRequest("Missing Stripe signature.");
+        var body = await new StreamReader(Request.Body).ReadToEndAsync(ct);
+        BillingEvent message;
+        try { message = verifier.Verify(body, signature); }
+        catch (InvalidWebhookException) { return BadRequest("Invalid Stripe event or signature."); }
+
+        try
         {
-            _webhookSecret = configuration["Stripe:WebhookSecret"]
-                ?? throw new ArgumentNullException("Stripe WebhookSecret not configured");
-            _userManager = userManager;
+            await billing.ProcessEventAsync(message, ct);
+            return Ok();
         }
-        [HttpPost]
-        public async Task<IActionResult> Handle()
+        catch (InvalidWebhookException) { return BadRequest("Invalid Stripe event."); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
         {
-            var json = await new StreamReader(Request.Body).ReadToEndAsync();
-            try
-            {
-                var stripeSignature = Request.Headers["Stripe-Signature"];
-                var stripeEvent = Stripe.EventUtility.ConstructEvent(
-                    json,
-                    stripeSignature,
-                    _webhookSecret
-                );
-                if (stripeEvent.Type == "checkout.session.completed")
-                {
-                    var session = stripeEvent.Data.Object as Stripe.Checkout.Session;
-                    if (session?.Metadata == null || !session.Metadata.TryGetValue("userId", out var userId))
-                    {
-                        return Ok(); // Don't fail webhook
-                    }
-                    var user = await _userManager.FindByIdAsync(session.Metadata["userId"]);
-                    if (user != null)
-                    {
-                        user.Tier = UserTier.Paid;
-                        user.StripeCustomerId = session.CustomerId;
-                        user.StripeSubscriptionId = session.SubscriptionId;
-                        await _userManager.UpdateAsync(user);
-                    }
-                    else
-                    {
-                        return BadRequest("Invalid Stripe Signature");
-                    }
-                }
-                if (stripeEvent.Type == "customer.subscription.deleted")
-                {
-                    var subscription = stripeEvent.Data.Object as Stripe.Subscription;
-                    var user = await _userManager.Users
-                        .FirstOrDefaultAsync(u => u.StripeSubscriptionId == subscription.Id);
-
-                    if (user != null)
-                    {
-                        user.Tier = UserTier.Free;
-                        user.StripeSubscriptionId = null;
-                        await _userManager.UpdateAsync(user);
-                    }
-                    else
-                    {
-                        return BadRequest("Invalid Stripe Signature");
-                    }
-                }
-                return Ok();
-            }
-            catch (Stripe.StripeException e)
-            {
-                return BadRequest();
-
-
-            }
+            logger.LogError("Stripe event {EventId} could not be committed ({ExceptionType}); delivery should retry.",
+                message.Id, ex.GetType().Name);
+            return StatusCode(503);
         }
     }
 }

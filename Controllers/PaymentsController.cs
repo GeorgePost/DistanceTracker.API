@@ -1,63 +1,41 @@
-﻿using DistanceTracker.API.Models;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
-using Stripe.Checkout;
 using System.Security.Claims;
+using DistanceTracker.API.Services.Billing;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
-namespace DistanceTracker.API.Controllers
+namespace DistanceTracker.API.Controllers;
+
+[ApiController]
+[Authorize]
+[Route("api/[controller]")]
+public sealed class PaymentsController(BillingService billing, ILogger<PaymentsController> logger) : ControllerBase
 {
-    [ApiController]
-    [Authorize]
-    [Route("api/[controller]")]
-    public class PaymentsController : ControllerBase
-    {
-        private readonly UserManager<ApplicationUser> _userManager;
-        private readonly string _frontendUrl;
-        private readonly string _priceId;
-        public PaymentsController(UserManager<ApplicationUser> userManager, IConfiguration configuration)
-        {
-            _userManager = userManager;
-            _frontendUrl = configuration["Frontend:BaseUrl"] ?? throw new ArgumentNullException("Frontend:BaseUrl not configured");
-            _priceId= configuration["Stripe:PriceId"] ?? throw new ArgumentNullException("Stripe PriceId not configured");
-        }
-        [Authorize]
-        [HttpPost("create-checkout")]
-        public async Task<IActionResult> CreateCheckoutSession()
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (userId == null)
-            {
-                return Unauthorized();
-            }
-            var user = await _userManager.FindByIdAsync(userId);
-            if (user == null)
-            {
-                return Unauthorized();
-            }
-            var options = new SessionCreateOptions
-            {
-                Mode = "subscription",
-                LineItems = new List<SessionLineItemOptions>
-                {
-                    new()
-                    {
-                        Price = _priceId,
-                        Quantity = 1,
-                    },
-                },
-                SuccessUrl = $"{_frontendUrl}/success",
-                CancelUrl = $"{_frontendUrl}/cancel",
-                CustomerEmail = user.Email,
-                Metadata = new Dictionary<string, string>
-                {
-                    ["userId"] = user.Id
-                }
-            };
-            var service = new SessionService();
-            var session = await service.CreateAsync(options);
+    [HttpPost("create-checkout")]
+    public Task<IActionResult> CreateCheckoutSession(CancellationToken ct) =>
+        ExecuteAsync(async id => Ok(new { url = (await billing.CreateCheckoutAsync(id, ct)).Url }));
 
-            return Ok(new {session.Url});
+    [HttpGet("subscription")]
+    public Task<IActionResult> GetSubscription(CancellationToken ct) =>
+        ExecuteAsync(async id => Ok(await billing.GetStatusAsync(id, ct)));
+
+    [HttpPost("create-portal")]
+    public Task<IActionResult> CreatePortal(CancellationToken ct) =>
+        ExecuteAsync(async id => Ok(new { url = await billing.CreatePortalAsync(id, ct) }));
+
+    private async Task<IActionResult> ExecuteAsync(Func<string, Task<IActionResult>> action)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId is null) return Unauthorized();
+        try { return await action(userId); }
+        catch (BillingUserNotFoundException) { return Unauthorized(); }
+        catch (BillingConflictException ex) { return Conflict(new { error = ex.Message }); }
+        catch (BillingUnavailableException) { return StatusCode(503, new { error = "Billing is disabled." }); }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            // Log type only: Stripe exceptions may contain provider details or sensitive parameters.
+            logger.LogError("Billing operation failed ({ExceptionType}).", ex.GetType().Name);
+            return StatusCode(503, new { error = "Billing is temporarily unavailable. Please retry." });
         }
     }
 }

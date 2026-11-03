@@ -1,8 +1,9 @@
-﻿using DistanceTracker.API.DTOs;
+using DistanceTracker.API.DTOs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 using System.Text.Json;
+using System.Globalization;
 
 namespace DistanceTracker.API.Services
 {
@@ -53,8 +54,8 @@ namespace DistanceTracker.API.Services
             await Task.Delay(1000);
             if (results != null && results.Count > 0)
             {
-                var lat = Decimal.Parse(results[0].lat);
-                var lon = Decimal.Parse(results[0].lon);
+                var lat = Decimal.Parse(results[0].lat, CultureInfo.InvariantCulture);
+                var lon = Decimal.Parse(results[0].lon, CultureInfo.InvariantCulture);
                 var resultTuple = (lat, lon);
                 var cacheDto = new GeoCacheDTO { Latitude = lat, Longitude = lon };
                 var serializedResult = JsonSerializer.Serialize(cacheDto);
